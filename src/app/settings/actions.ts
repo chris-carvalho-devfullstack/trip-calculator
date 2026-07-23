@@ -15,6 +15,10 @@ export async function saveSettings(formData: FormData) {
   const base_address = formData.get('base_address') as string
   const price_per_km = parseFloat(formData.get('price_per_km') as string)
   const google_maps_key = formData.get('google_maps_key') as string
+  
+  // Novos campos de despesas do veículo
+  const fuel_price = parseFloat(formData.get('fuel_price') as string)
+  const car_consumption = parseFloat(formData.get('car_consumption') as string)
 
   // Faz o Upsert
   const { error } = await supabase
@@ -24,6 +28,8 @@ export async function saveSettings(formData: FormData) {
       base_address,
       price_per_km,
       google_maps_key,
+      fuel_price,          // <-- Inserindo no banco
+      car_consumption,     // <-- Inserindo no banco
       updated_at: new Date().toISOString()
     }, { 
       onConflict: 'user_id' 

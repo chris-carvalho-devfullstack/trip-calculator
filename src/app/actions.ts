@@ -3,11 +3,10 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// Tipagens para a API do Google e para a nossa resposta
 interface DistanceMatrixElement {
   status: string;
   distance: { value: number; text: string };
-  duration: { value: number; text: string };
+  duration: { value: number; text: string }; // <-- Tempo em segundos
 }
 
 interface DistanceMatrixResponse {
@@ -24,8 +23,18 @@ export interface RideCalculation {
     returnToOrigin: number;
     total: number;
   };
-  pricePerKm: number;
-  expectedValue: number;
+  durations: {
+    totalSeconds: number;
+    formattedText: string;
+  };
+  financials: {
+    pricePerKm: number;
+    grossValue: number;
+    fuelCost: number;
+    netValue: number;
+    grossPerHour: number;
+    netPerHour: number;
+  };
   addresses: {
     origin: string;
     pickup: string;
@@ -41,13 +50,13 @@ export async function calculateRideAction(
 ): Promise<{ success?: boolean; data?: RideCalculation; error?: string }> {
   const supabase = await createClient()
 
-  // 1. Valida o usuário e pega a chave do Google
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Não autenticado." }
 
+  // Puxa a chave E os dados do carro para o cálculo de despesas
   const { data: settings } = await supabase
     .from('settings')
-    .select('google_maps_key')
+    .select('google_maps_key, fuel_price, car_consumption')
     .eq('user_id', user.id)
     .single()
 
@@ -55,7 +64,6 @@ export async function calculateRideAction(
     return { error: "Chave do Google Maps não configurada. Acesse Configurações." }
   }
 
-  // 2. Monta a requisição otimizada (Pega os 3 trechos em 1 única chamada)
   const origins = [originAddress, pickupAddress, destinationAddress].map(encodeURIComponent).join('|')
   const destinations = [pickupAddress, destinationAddress, originAddress].map(encodeURIComponent).join('|')
   
@@ -69,29 +77,59 @@ export async function calculateRideAction(
       return { error: `Erro na API do Google Maps: ${data.status}` }
     }
 
-    // Função auxiliar para extrair a distância e lidar com erros de rota
-    const getDistance = (rowIdx: number, colIdx: number, stepName: string) => {
+    const getElement = (rowIdx: number, colIdx: number, stepName: string) => {
       const element = data.rows[rowIdx]?.elements[colIdx]
       if (element?.status !== 'OK') {
         throw new Error(`Não foi possível traçar a rota para o trecho: ${stepName}`)
       }
-      return element.distance.value / 1000 // Converte metros para KM
+      return element
     }
 
-    // Extrai exatamente a diagonal da matriz de distâncias
-    const toPickup = getDistance(0, 0, "Até o Embarque")
-    const toDestination = getDistance(1, 1, "Até o Destino")
-    const returnToOrigin = getDistance(2, 2, "Retorno")
+    const elToPickup = getElement(0, 0, "Até o Embarque")
+    const elToDest = getElement(1, 1, "Até o Destino")
+    const elToOrigin = getElement(2, 2, "Retorno")
 
-    const total = toPickup + toDestination + returnToOrigin
-    const expectedValue = total * pricePerKm
+    // Distâncias (KM)
+    const toPickup = elToPickup.distance.value / 1000
+    const toDestination = elToDest.distance.value / 1000
+    const returnToOrigin = elToOrigin.distance.value / 1000
+    const totalDistance = toPickup + toDestination + returnToOrigin
+
+    // Tempos (Segundos)
+    const totalSeconds = elToPickup.duration.value + elToDest.duration.value + elToOrigin.duration.value
+    const totalHours = totalSeconds / 3600
+
+    // Formatação de Tempo (ex: 1h 30m)
+    const hrs = Math.floor(totalHours)
+    const mins = Math.round((totalHours - hrs) * 60)
+    const formattedTime = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`
+
+    // --- CÁLCULOS FINANCEIROS ---
+    const grossValue = totalDistance * pricePerKm
+    
+    // Calcula custo apenas se o usuário cadastrou gasolina e consumo no settings
+    let fuelCost = 0
+    if (settings.fuel_price && settings.car_consumption && settings.car_consumption > 0) {
+      fuelCost = (totalDistance / settings.car_consumption) * settings.fuel_price
+    }
+
+    const netValue = grossValue - fuelCost
+    const grossPerHour = totalHours > 0 ? grossValue / totalHours : 0
+    const netPerHour = totalHours > 0 ? netValue / totalHours : 0
 
     return {
       success: true,
       data: {
-        distances: { toPickup, toDestination, returnToOrigin, total },
-        pricePerKm,
-        expectedValue,
+        distances: { toPickup, toDestination, returnToOrigin, total: totalDistance },
+        durations: { totalSeconds, formattedText: formattedTime },
+        financials: {
+          pricePerKm,
+          grossValue,
+          fuelCost,
+          netValue,
+          grossPerHour,
+          netPerHour
+        },
         addresses: {
           origin: data.origin_addresses[0] || originAddress,
           pickup: data.origin_addresses[1] || pickupAddress,
@@ -100,20 +138,19 @@ export async function calculateRideAction(
       }
     }
   } catch (error: unknown) {
-    // Tratamento seguro de erro sem usar 'any'
-    if (error instanceof Error) {
-      return { error: error.message || "Erro ao calcular rotas. Verifique os endereços." }
-    }
-    return { error: "Erro desconhecido ao calcular rotas. Verifique os endereços." }
+    if (error instanceof Error) return { error: error.message }
+    return { error: "Erro desconhecido ao calcular rotas." }
   }
 }
 
-// Action para salvar a corrida no histórico quando você clicar em "Aceitar"
 export async function acceptRideAction(rideData: RideCalculation, originType: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Não autenticado." }
 
+  const now = new Date()
+
+  // Atualizando para salvar o valor líquido (se quiser, pode adicionar as outras colunas no Supabase depois)
   const { error } = await supabase.from('rides').insert({
     user_id: user.id,
     origin_type: originType,
@@ -123,14 +160,15 @@ export async function acceptRideAction(rideData: RideCalculation, originType: st
     distance_pickup_to_dest: rideData.distances.toDestination,
     distance_return: rideData.distances.returnToOrigin,
     total_distance: rideData.distances.total,
-    price_per_km: rideData.pricePerKm,
-    expected_value: rideData.expectedValue,
+    price_per_km: rideData.financials.pricePerKm,
+    expected_value: rideData.financials.grossValue,
     status: 'aceita',
-    date: new Date().toISOString().split('T')[0] // Data de hoje YYYY-MM-DD
+    created_at: now.toISOString(),
+    date: now.toISOString().split('T')[0]
   })
 
   if (error) return { error: "Erro ao salvar corrida no histórico." }
 
-  revalidatePath('/history') // Vai atualizar a lista de histórico futuramente
+  revalidatePath('/history')
   return { success: true }
 }
