@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner"; // <-- Importação do Toaster do Sonner
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip"; 
+import { AppLayoutWrapper } from "@/components/app-layout-wrapper"; // <-- Importamos o Wrapper
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Simulador de Corridas", // <-- Atualizado
-  description: "Calcule rotas e ganhos previstos.", // <-- Atualizado
+  title: "Trip Cash",
+  description: "Calcule rotas, custos e lucros de forma inteligente.",
 };
 
 export default function RootLayout({
@@ -25,12 +27,19 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="pt-BR" // <-- Atualizado para português
+      lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        {children}
-        <Toaster richColors position="top-right" /> {/* <-- Toaster adicionado aqui */}
+      {/* Mudamos min-h-full para h-full para o layout ocupar exatamente 100% da tela */}
+      <body className="h-full flex flex-col overflow-hidden">
+        <TooltipProvider>
+          {/* O Wrapper vai decidir se mostra o Menu ou não baseado na rota */}
+          <AppLayoutWrapper>
+            {children}
+          </AppLayoutWrapper>
+        </TooltipProvider>
+        
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );
