@@ -18,6 +18,9 @@ interface SimulatorSettings {
   google_maps_key?: string | null;
 }
 
+// Estilo de barra de rolagem customizada e fluida
+const customScrollbar = "overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-zinc-300/50 active:[&::-webkit-scrollbar-thumb]:bg-zinc-400 [&::-webkit-scrollbar-thumb]:rounded-full transition-all"
+
 export function SimulatorForm({ initialSettings }: { initialSettings: SimulatorSettings | null }) {
   // Estados do Formulário
   const [originType, setOriginType] = useState("base")
@@ -99,7 +102,7 @@ export function SimulatorForm({ initialSettings }: { initialSettings: SimulatorS
     if (response.error) {
       toast.error("Erro ao salvar", { description: response.error })
     } else {
-      toast.success("Corrida Aceita!", { description: "Registrada no seu histórico." })
+      toast.success("Corrida Aceita!", { description: "Registrada no seu histórico com todos os detalhes." })
       setPickupAddress("")
       setDestinationAddress("")
       setResult(null) 
@@ -111,8 +114,8 @@ export function SimulatorForm({ initialSettings }: { initialSettings: SimulatorS
   // --- RENDERIZAÇÃO DA TELA DE RESULTADO ---
   if (result) {
     return (
-      <main className="min-h-screen bg-zinc-50 p-4 md:p-8 flex justify-center pb-24">
-        <div className="w-full max-w-md space-y-6">
+      <main className={`h-[100dvh] bg-zinc-50 p-4 md:p-8 flex justify-center pb-32 ${customScrollbar}`}>
+        <div className="w-full max-w-md space-y-6 h-fit">
           <div className="text-center space-y-2 py-4">
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Resultado da Simulação</h1>
             <p className="text-sm text-zinc-500">Relatório financeiro e logístico da rota.</p>
@@ -213,8 +216,8 @@ export function SimulatorForm({ initialSettings }: { initialSettings: SimulatorS
 
   // --- RENDERIZAÇÃO DO FORMULÁRIO INICIAL ---
   return (
-    <main className="min-h-screen bg-zinc-50 p-4 md:p-8 flex justify-center pb-24">
-      <div className="w-full max-w-md space-y-6">
+    <main className={`h-[100dvh] bg-zinc-50 p-4 md:p-8 flex justify-center pb-32 ${customScrollbar}`}>
+      <div className="w-full max-w-md space-y-6 h-fit">
         <div className="text-center space-y-2 py-4">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Nova Simulação</h1>
           <p className="text-sm text-zinc-500">Calcule rotas, custos e lucros de forma inteligente.</p>

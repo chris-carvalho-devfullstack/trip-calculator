@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 interface DistanceMatrixElement {
   status: string;
   distance: { value: number; text: string };
-  duration: { value: number; text: string }; // <-- Tempo em segundos
+  duration: { value: number; text: string };
 }
 
 interface DistanceMatrixResponse {
@@ -53,7 +53,6 @@ export async function calculateRideAction(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Não autenticado." }
 
-  // Puxa a chave E os dados do carro para o cálculo de despesas
   const { data: settings } = await supabase
     .from('settings')
     .select('google_maps_key, fuel_price, car_consumption')
@@ -89,25 +88,20 @@ export async function calculateRideAction(
     const elToDest = getElement(1, 1, "Até o Destino")
     const elToOrigin = getElement(2, 2, "Retorno")
 
-    // Distâncias (KM)
     const toPickup = elToPickup.distance.value / 1000
     const toDestination = elToDest.distance.value / 1000
     const returnToOrigin = elToOrigin.distance.value / 1000
     const totalDistance = toPickup + toDestination + returnToOrigin
 
-    // Tempos (Segundos)
     const totalSeconds = elToPickup.duration.value + elToDest.duration.value + elToOrigin.duration.value
     const totalHours = totalSeconds / 3600
 
-    // Formatação de Tempo (ex: 1h 30m)
     const hrs = Math.floor(totalHours)
     const mins = Math.round((totalHours - hrs) * 60)
     const formattedTime = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`
 
-    // --- CÁLCULOS FINANCEIROS ---
     const grossValue = totalDistance * pricePerKm
     
-    // Calcula custo apenas se o usuário cadastrou gasolina e consumo no settings
     let fuelCost = 0
     if (settings.fuel_price && settings.car_consumption && settings.car_consumption > 0) {
       fuelCost = (totalDistance / settings.car_consumption) * settings.fuel_price
@@ -150,24 +144,40 @@ export async function acceptRideAction(rideData: RideCalculation, originType: st
 
   const now = new Date()
 
-  // Atualizando para salvar o valor líquido (se quiser, pode adicionar as outras colunas no Supabase depois)
+  // Inserção completa mapeando todos os dados da simulação para a tabela 'rides'
   const { error } = await supabase.from('rides').insert({
     user_id: user.id,
     origin_type: originType,
+    full_address_origin: rideData.addresses.origin,
     pickup_address: rideData.addresses.pickup,
     destination_address: rideData.addresses.destination,
+    full_address_destination: rideData.addresses.destination,
+    
     distance_to_pickup: rideData.distances.toPickup,
     distance_pickup_to_dest: rideData.distances.toDestination,
     distance_return: rideData.distances.returnToOrigin,
     total_distance: rideData.distances.total,
+    
     price_per_km: rideData.financials.pricePerKm,
     expected_value: rideData.financials.grossValue,
+    
+    // Novos campos analíticos da simulação exibidos no modal
+    fuel_cost_estimated: rideData.financials.fuelCost,
+    gross_per_hour: rideData.financials.grossPerHour,
+    net_per_hour: rideData.financials.netPerHour,
+    estimated_net_profit: rideData.financials.netValue,
+    estimated_time: rideData.durations.formattedText,
+    
     status: 'aceita',
+    is_closed: false,
     created_at: now.toISOString(),
     date: now.toISOString().split('T')[0]
   })
 
-  if (error) return { error: "Erro ao salvar corrida no histórico." }
+  if (error) {
+    console.error("Erro ao salvar corrida:", error)
+    return { error: "Erro ao salvar corrida no histórico." }
+  }
 
   revalidatePath('/history')
   return { success: true }
