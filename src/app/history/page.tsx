@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { 
   MapPin, Calendar, CheckCircle2, Clock, Navigation, DollarSign, 
   Receipt, Loader2, Trash2, Edit2, AlertCircle, TrendingUp, 
-  ChevronLeft, ChevronRight, Map, FileText, Flame
+  ChevronLeft, ChevronRight, Map, FileText
 } from "lucide-react"
 import { toast } from "sonner"
 import { getRideHistory, closeRideFinancials, deleteRideRecord } from "./actions"
@@ -66,7 +66,6 @@ export default function HistoryPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  // Estados locais para controlar os cálculos automáticos do formulário
   const [formTolls, setFormTolls] = useState<string>("")
   const [formActualValue, setFormActualValue] = useState<string>("")
 
@@ -86,26 +85,11 @@ export default function HistoryPage() {
 
   const selectedRide = useMemo(() => rides.find(r => r.id === expandedId), [rides, expandedId])
 
-  // Sincroniza os valores iniciais do formulário ao abrir o modal ou entrar em edição
-  useEffect(() => {
-    if (selectedRide) {
-      if (editingId === selectedRide.id) {
-        setFormTolls(selectedRide.tolls_amount ? selectedRide.tolls_amount.toString() : "")
-        setFormActualValue(selectedRide.actual_value ? selectedRide.actual_value.toFixed(2) : selectedRide.expected_value.toFixed(2))
-      } else {
-        setFormTolls(selectedRide.tolls_amount ? selectedRide.tolls_amount.toString() : "")
-        setFormActualValue(selectedRide.expected_value.toFixed(2))
-      }
-    }
-  }, [selectedRide, editingId])
-
-  // Calcula automaticamente o Valor Pago ao alterar os Pedágios
   const handleTollsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setFormTolls(val)
     const tollsNum = parseFloat(val) || 0
     if (selectedRide) {
-      // O valor recebido será o valor simulado da corrida + o pedágio informado
       const newValue = selectedRide.expected_value + tollsNum
       setFormActualValue(newValue.toFixed(2))
     }
@@ -297,7 +281,17 @@ export default function HistoryPage() {
                 <div className="bg-zinc-50 py-2.5 mb-2 -mx-2 px-2"><h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">{group.title}</h3></div>
                 <div className="space-y-4">
                   {group.items.map((ride) => (
-                    <Card key={ride.id} onClick={() => { setExpandedId(ride.id); setEditingId(null); setConfirmDeleteId(null) }} className={`overflow-hidden transition-all shadow-sm cursor-pointer hover:shadow-md hover:border-zinc-300 ${ride.is_closed ? 'border-emerald-200' : 'border-zinc-200'}`}>
+                    <Card 
+                      key={ride.id} 
+                      onClick={() => { 
+                        setExpandedId(ride.id)
+                        setEditingId(null)
+                        setConfirmDeleteId(null)
+                        setFormTolls(ride.tolls_amount ? ride.tolls_amount.toString() : "")
+                        setFormActualValue(ride.expected_value.toFixed(2))
+                      }} 
+                      className={`overflow-hidden transition-all shadow-sm cursor-pointer hover:shadow-md hover:border-zinc-300 ${ride.is_closed ? 'border-emerald-200' : 'border-zinc-200'}`}
+                    >
                       <CardHeader className={`pb-4 ${ride.is_closed ? 'bg-emerald-50/50' : 'bg-white'}`}>
                         <div className="flex justify-between items-start">
                           <div className="space-y-2 pr-4">
@@ -325,7 +319,7 @@ export default function HistoryPage() {
           MODAL FULL-SCREEN NATIVO DE DETALHES
           ======================================================================= */}
       {selectedRide && (
-        <div className="fixed top-0 left-0 right-0 bottom-0 z-50 h-[100dvh] bg-zinc-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-8 md:p-8 md:bg-zinc-900/40 md:backdrop-blur-sm">
+        <div className="fixed top-0 left-0 right-0 bottom-0 z-50 h-dvh bg-zinc-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-8 md:p-8 md:bg-zinc-900/40 md:backdrop-blur-sm">
           <div className="flex-1 bg-zinc-50 w-full h-full md:max-w-2xl md:mx-auto md:rounded-3xl flex flex-col overflow-hidden md:shadow-2xl">
             
             <div className="bg-white px-4 py-4 border-b flex items-center justify-between shadow-sm shrink-0 z-20">
@@ -347,7 +341,7 @@ export default function HistoryPage() {
                 </div>
               )}
 
-              {/* Bloco de Resumo Superior (Opcional, com Mapa e Tempos Estimados) */}
+              {/* Bloco de Resumo Superior */}
               <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
                 <div className="p-5 border-b border-zinc-100">
                   <div className="flex justify-between items-center text-zinc-500 mb-4">
@@ -375,7 +369,6 @@ export default function HistoryPage() {
                   <div className="w-full h-56 bg-zinc-200 rounded-xl overflow-hidden pointer-events-none relative shadow-inner border border-zinc-200">
                     {(selectedRide.full_address_origin && selectedRide.pickup_address && selectedRide.destination_address && apiKey) ? (
                       <RouteMap 
-                        /* @ts-expect-error */
                         apiKey={apiKey} origin={selectedRide.full_address_origin} pickup={selectedRide.pickup_address} destination={selectedRide.destination_address}
                       />
                     ) : selectedRide.map_image_url ? (
@@ -432,7 +425,7 @@ export default function HistoryPage() {
               {/* FORMULÁRIO DE FECHAMENTO (EDIÇÃO / PENDENTE) */}
               {(!selectedRide.is_closed || editingId === selectedRide.id) ? (
                 <form 
-                  key={`form-${selectedRide.id}-${editingId || 'new'}`} // O key força a recriação correta do form ao abrir
+                  key={`form-${selectedRide.id}-${editingId || 'new'}`} 
                   onSubmit={(e) => handleCloseRide(e, selectedRide.id)} 
                   className="space-y-5 bg-white p-5 rounded-xl border border-zinc-200 shadow-sm"
                 >
@@ -441,7 +434,6 @@ export default function HistoryPage() {
                     <h4 className="font-bold text-zinc-800 text-lg">Informar Recebimento</h4>
                   </div>
 
-                  {/* Mostra a base calculada fixa no topo do formulário */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex flex-col items-center justify-center text-center">
                       <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1">Distância Simulada</span>
@@ -507,7 +499,17 @@ export default function HistoryPage() {
                   <Button type="submit" className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md font-semibold text-base mt-4 rounded-xl" disabled={isSubmitting}>
                     {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <DollarSign className="w-5 h-5 mr-2" />} {editingId === selectedRide.id ? "Atualizar Valores" : "Salvar e Fechar Corrida"}
                   </Button>
-                  {editingId === selectedRide.id && <Button type="button" variant="ghost" className="w-full h-10 mt-2 text-zinc-500" onClick={() => setEditingId(null)}>Cancelar Edição</Button>}
+                  {editingId === selectedRide.id && (
+                    <Button type="button" variant="ghost" className="w-full h-10 mt-2 text-zinc-500" onClick={() => {
+                      setEditingId(null);
+                      if (selectedRide) {
+                        setFormTolls(selectedRide.tolls_amount ? selectedRide.tolls_amount.toString() : "");
+                        setFormActualValue(selectedRide.expected_value.toFixed(2));
+                      }
+                    }}>
+                      Cancelar Edição
+                    </Button>
+                  )}
                 </form>
               ) : (
                 
@@ -516,9 +518,16 @@ export default function HistoryPage() {
                   <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
                     <h4 className="font-bold text-emerald-700 flex items-center gap-2 text-lg"><CheckCircle2 className="w-5 h-5" /> Resumo do Recebimento</h4>
                     <div className="flex gap-1">
-                      {/* BOTOES EDITAR E EXCLUIR FUNCIONANDO PERFEITAMENTE AQUI */}
-                      <Button variant="ghost" size="icon" className="h-10 w-10 text-zinc-500 hover:text-blue-600 hover:bg-blue-50 rounded-full" onClick={() => setEditingId(selectedRide.id)}><Edit2 className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-10 w-10 text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => setConfirmDeleteId(selectedRide.id)}><Trash2 className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-10 w-10 text-zinc-500 hover:text-blue-600 hover:bg-blue-50 rounded-full" onClick={() => {
+                        setEditingId(selectedRide.id);
+                        setFormTolls(selectedRide.tolls_amount ? selectedRide.tolls_amount.toString() : "");
+                        setFormActualValue(selectedRide.actual_value ? selectedRide.actual_value.toFixed(2) : selectedRide.expected_value.toFixed(2));
+                      }}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-10 w-10 text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-full" onClick={() => setConfirmDeleteId(selectedRide.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-y-6 gap-x-4 text-sm">
